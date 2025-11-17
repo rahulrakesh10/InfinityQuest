@@ -2,6 +2,7 @@
 package edu.uwo.cs2212.engine.model;
 
 import java.util.*;
+import edu.uwo.cs2212.engine.rules.Want;
 
 /** Characters are non-pickup entities you can Talk to and Give items to. */
 public final class GameCharacter {

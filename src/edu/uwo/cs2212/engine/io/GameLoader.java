@@ -35,20 +35,95 @@ public final class GameLoader {
         objects.put(picks.getId(), picks);
 
 
-        // Character
+        // Characters
+        // Dylin - The main character (player)
+        GameCharacter dylin = new GameCharacter("char_dylin", "Dylin", 
+                "You are Dylin, a brave adventurer on a quest to collect the Infinity Stones and defeat Thanos.",
+                List.of("I must collect all the Infinity Stones!", 
+                        "Thanos must be stopped!",
+                        "I'll use my wits and courage to save the universe."),
+                List.of());
+        characters.put(dylin.getId(), dylin);
+        
+        // Silver Surfer - helper NPC
+        GameCharacter silverSurfer = new GameCharacter("char_silver_surfer", "Silver Surfer", 
+                "A cosmic entity who can provide guidance and hints on your quest.",
+                List.of("Welcome, Dylin. I can help you on your quest.", 
+                        "Click on objects to interact with them.",
+                        "Use items together to solve puzzles.",
+                        "Collect all the Infinity Stones to defeat Thanos!",
+                        "Each world has a boss you must defeat.",
+                        "New York, Asgard, Sokovia, and the Moon await you."),
+                List.of());
+        characters.put(silverSurfer.getId(), silverSurfer);
+        
+        // Patient (keeping for now, can be removed later)
         GameCharacter patient = new GameCharacter("char_patient", "Bedridden Stranger", "Parched and weak.",
                 List.of("I'm so thirsty...", "Do you have water?"), List.of(new Want("obj_cup_water", null)));
         characters.put(patient.getId(), patient);
 
         // Locations
+        // New York - Symbiote Spider-Man boss
+        Location newYork = new Location("loc_new_york", "New York", 
+                "The streets of New York. Symbiote Spider-Man lurks here. You'll need the Siren to defeat him.",
+                "images/Stage1.png", 
+                new ArrayList<>(), 
+                new ArrayList<>(), 
+                new ArrayList<>(List.of(new Connection("back", "loc_toronto"))));
+        
+        // Asgard - Thor boss
+        Location asgard = new Location("loc_asgard", "Asgard", 
+                "The realm of Asgard. Thor awaits with Stormbreaker. Reflect his lightning to defeat him.",
+                "images/Stage2.png", 
+                new ArrayList<>(), 
+                new ArrayList<>(), 
+                new ArrayList<>(List.of(new Connection("back", "loc_toronto"))));
+        
+        // Sokovia - Wanda boss
+        Location sokovia = new Location("loc_sokovia", "Sokovia", 
+                "The ruins of Sokovia. Wanda's logic puzzles block your path. Solve them to proceed.",
+                "images/Stage3.png", 
+                new ArrayList<>(), 
+                new ArrayList<>(), 
+                new ArrayList<>(List.of(new Connection("back", "loc_toronto"))));
+        
+        // Moon - Thanos boss (final)
+        Location moon = new Location("loc_moon", "Moon", 
+                "The Moon. Thanos awaits with the Infinity Gauntlet. This is the final battle!",
+                "images/Stage4_V1.png", 
+                new ArrayList<>(), 
+                new ArrayList<>(), 
+                new ArrayList<>(List.of(new Connection("back", "loc_toronto"))));
+        
+        // Starting location - Toronto (Base/Hub)
+        Location toronto = new Location("loc_toronto", "Toronto", 
+                "You stand in Toronto, your central hub. The CN Tower looms in the distance. Silver Surfer approaches to offer guidance. " +
+                "Choose your destination: New York, Asgard, Sokovia, or the Moon.",
+                "images/Base.png", 
+                new ArrayList<>(List.of("obj_pole", "obj_lockpicks")), 
+                new ArrayList<>(List.of("char_silver_surfer")), // Dylin is the player, not an NPC
+                new ArrayList<>(List.of(
+                    new Connection("New York", "loc_new_york"),
+                    new Connection("Asgard", "loc_asgard"),
+                    new Connection("Sokovia", "loc_sokovia"),
+                    new Connection("Moon", "loc_moon")
+                )));
+        
+        // Old crypt location (keeping for compatibility)
         Location crypt = new Location("loc_crypt", "Crypt", "A stone room; a sealed coffin rests here.",
-                "images/crypt.png", new ArrayList<>(List.of("obj_coffin", "obj_pole", "obj_locked_chest", "obj_lockpicks")), new ArrayList<>(), new ArrayList<>());
+                "images/Base.png", new ArrayList<>(List.of("obj_coffin", "obj_pole", "obj_locked_chest", "obj_lockpicks")), 
+                new ArrayList<>(List.of("char_silver_surfer")), new ArrayList<>());
         Location tunnel = new Location("loc_tunnel", "Hidden Tunnel", "A narrow passage leading north.",
-                "images/tunnel.png", new ArrayList<>(), new ArrayList<>(),
+                "images/Stage1.png", new ArrayList<>(), new ArrayList<>(),
                 new ArrayList<>(List.of(new Connection("north", "loc_outside"))));
-        Location outside = new Location("loc_outside", "Outside", "Fresh air at last!", "images/outside.png",
+        Location outside = new Location("loc_outside", "Outside", "Fresh air at last!", "images/Final.png",
                 new ArrayList<>(), new ArrayList<>(), new ArrayList<>());
 
+        locations.put(toronto.getId(), toronto);
+        locations.put(newYork.getId(), newYork);
+        locations.put(asgard.getId(), asgard);
+        locations.put(sokovia.getId(), sokovia);
+        locations.put(moon.getId(), moon);
         locations.put(crypt.getId(), crypt);
         locations.put(tunnel.getId(), tunnel);
         locations.put(outside.getId(), outside);
@@ -75,11 +150,13 @@ public final class GameLoader {
                 "“Thank you.” They hand you a brass key.", List.of("obj_brass_key"), false));
 
         return new Game(
-                "Crypt Escape",
-                "You awake in a crypt...",
-                "loc_crypt",
-                new HashSet<>(Set.of("loc_outside")),
-                50,
+                "Infinity Quest",
+                "Welcome, Dylin! You are on a quest to collect all five Infinity Stones and defeat Thanos. " +
+                "Navigate through New York, Asgard, Sokovia, and the Moon. Silver Surfer is here to guide you. " +
+                "Click on objects, characters, and navigation buttons to interact. Good luck!",
+                "loc_toronto",
+                new HashSet<>(Set.of("loc_moon")), // Moon is the final location
+                null, // No turn limit - this is an exploration/adventure game
                 locations,
                 objects,
                 characters,
