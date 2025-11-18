@@ -42,6 +42,25 @@ public class GameGUI extends JFrame {
     private String[][] conversation;
     private int currentDialogueIndex = -1; // -1 means no dialogue active
     private boolean showingInitialDialogue = false;
+
+    /**
+     * Metadata for villain sprites shown on boss stages.
+     */
+    private static class VillainConfig {
+        final String imagePath;
+        final int targetHeight;
+        VillainConfig(String imagePath, int targetHeight) {
+            this.imagePath = imagePath;
+            this.targetHeight = targetHeight;
+        }
+    }
+
+    private static final Map<String, VillainConfig> VILLAIN_CONFIGS = Map.of(
+        "loc_new_york", new VillainConfig("images/Symbiote.png", 180),
+        "loc_asgard", new VillainConfig("images/Thor.png", 220),
+        "loc_sokovia", new VillainConfig("images/Scarlet.png", 180),
+        "loc_moon", new VillainConfig("images/ThanosV1.png", 260)
+    );
     
     public GameGUI() {
         // Initialize game
@@ -157,51 +176,17 @@ public class GameGUI extends JFrame {
         private String currentImagePath;
         private Image dylinImage;
         private Image silverSurferImage;
+        private Map<String, Image> villainImages = new HashMap<>();
         
         public GameViewPanel() {
             addMouseListener(new MouseAdapter() {
                 @Override
-                public void mouseClicked(MouseEvent e) {
+                public void mousePressed(MouseEvent e) {
+                    // Use mousePressed instead of mouseClicked for more responsive button handling
                     // Check if clicking on dialogue "Next" button
                     if (currentDialogueIndex >= 0 && currentDialogueIndex < conversation.length) {
-                        int inventoryBarHeight = 60;
-                        int messageAreaHeight = 80;
-                        int characterBaseY = getHeight() - inventoryBarHeight - messageAreaHeight - 20;
-                        int targetHeight = 120;
-                        
-                        String[] message = conversation[currentDialogueIndex];
-                        boolean isSilverSurfer = message[0].equals("Silver Surfer");
-                        
-                        int bubbleX, bubbleY;
-                        if (isSilverSurfer) {
-                            int surferWidth = silverSurferImage != null ? silverSurferImage.getWidth(null) : 100;
-                            int surferHeight = silverSurferImage != null ? silverSurferImage.getHeight(null) : 120;
-                            double scale = silverSurferImage != null ? (double) targetHeight / surferHeight : 1.0;
-                            int scaledWidth = (int) (surferWidth * scale);
-                            int surferX = (getWidth() * 2) / 3 - scaledWidth / 2;
-                            int surferY = characterBaseY - (int)(surferHeight * scale);
-                            bubbleX = surferX + scaledWidth / 2 - 200;
-                            bubbleY = surferY - 150;
-                        } else {
-                            int dylinWidth = dylinImage != null ? dylinImage.getWidth(null) : 100;
-                            int dylinHeight = dylinImage != null ? dylinImage.getHeight(null) : 120;
-                            double scale = dylinImage != null ? (double) targetHeight / dylinHeight : 1.0;
-                            int scaledWidth = (int) (dylinWidth * scale);
-                            int dylinX = getWidth() / 3 - scaledWidth / 2;
-                            int dylinY = characterBaseY - (int)(dylinHeight * scale);
-                            bubbleX = dylinX + scaledWidth / 2 - 200;
-                            bubbleY = dylinY - 150;
-                        }
-                        
-                        if (bubbleX < 10) bubbleX = 10;
-                        if (bubbleX + 400 > getWidth() - 10) bubbleX = getWidth() - 410;
-                        if (bubbleY < 10) bubbleY = 10;
-                        
-                        int buttonX = bubbleX + 400 - 100;
-                        int buttonY = bubbleY + 120 - 35;
-                        Rectangle buttonRect = new Rectangle(buttonX, buttonY, 80, 25);
-                        
-                        if (buttonRect.contains(e.getPoint())) {
+                        Rectangle buttonRect = getDialogueButtonRect();
+                        if (buttonRect != null && buttonRect.contains(e.getPoint())) {
                             nextDialogue();
                             return;
                         }
@@ -229,6 +214,7 @@ public class GameGUI extends JFrame {
             
             // Load character images
             loadCharacterImages();
+            loadVillainImages();
         }
         
         private void loadCharacterImages() {
@@ -251,6 +237,85 @@ public class GameGUI extends JFrame {
                 ImageIcon icon = new ImageIcon(surferFile.getAbsolutePath());
                 silverSurferImage = icon.getImage();
             }
+        }
+
+        private void drawSprite(Graphics2D g2d, Image image, int x, int y, int width, int height, boolean flipHorizontal) {
+            if (image == null) {
+                return;
+            }
+            if (!flipHorizontal) {
+                g2d.drawImage(image, x, y, width, height, null);
+            } else {
+                g2d.drawImage(image, x + width, y, -width, height, null);
+            }
+        }
+
+        private void loadVillainImages() {
+            for (Map.Entry<String, VillainConfig> entry : VILLAIN_CONFIGS.entrySet()) {
+                String locationId = entry.getKey();
+                VillainConfig config = entry.getValue();
+                File villainFile = new File(config.imagePath);
+                if (!villainFile.exists()) {
+                    villainFile = new File(System.getProperty("user.dir"), config.imagePath);
+                }
+                if (villainFile.exists()) {
+                    ImageIcon icon = new ImageIcon(villainFile.getAbsolutePath());
+                    villainImages.put(locationId, icon.getImage());
+                }
+            }
+        }
+        
+        /**
+         * Calculate the dialogue button rectangle using the same logic as paintComponent.
+         * Returns null if no dialogue is active.
+         */
+        private Rectangle getDialogueButtonRect() {
+            if (currentDialogueIndex < 0 || currentDialogueIndex >= conversation.length) {
+                return null;
+            }
+            
+            int inventoryBarHeight = 60;
+            int messageAreaHeight = 80;
+            int characterBaseY = getHeight() - inventoryBarHeight - messageAreaHeight - 20;
+            int targetHeight = 180; // Increased from 120 to make characters bigger
+            
+            String[] message = conversation[currentDialogueIndex];
+            boolean isSilverSurfer = message[0].equals("Silver Surfer");
+            
+            int bubbleX, bubbleY;
+            if (isSilverSurfer) {
+                int surferWidth = silverSurferImage != null ? silverSurferImage.getWidth(null) : 100;
+                int surferHeight = silverSurferImage != null ? silverSurferImage.getHeight(null) : 120;
+                double scale = silverSurferImage != null ? (double) targetHeight / surferHeight : 1.0;
+                int scaledWidth = (int) (surferWidth * scale);
+                int surferX = (getWidth() * 2) / 3 - scaledWidth / 2;
+                int surferY = characterBaseY - (int)(surferHeight * scale);
+                bubbleX = surferX + scaledWidth / 2 - 200;
+                bubbleY = surferY - 150;
+            } else {
+                int dylinWidth = dylinImage != null ? dylinImage.getWidth(null) : 100;
+                int dylinHeight = dylinImage != null ? dylinImage.getHeight(null) : 120;
+                double scale = dylinImage != null ? (double) targetHeight / dylinHeight : 1.0;
+                int scaledWidth = (int) (dylinWidth * scale);
+                int dylinX = getWidth() / 3 - scaledWidth / 2;
+                int dylinY = characterBaseY - (int)(dylinHeight * scale);
+                bubbleX = dylinX + scaledWidth / 2 - 200;
+                bubbleY = dylinY - 150;
+            }
+            
+            int bubbleWidth = 400;
+            int bubbleHeight = 120;
+            
+            // Ensure bubble stays on screen (same logic as paintComponent)
+            if (bubbleX < 10) bubbleX = 10;
+            if (bubbleX + bubbleWidth > getWidth() - 10) bubbleX = getWidth() - bubbleWidth - 10;
+            if (bubbleY < 10) bubbleY = 10;
+            
+            // Calculate button position (same as paintComponent)
+            int buttonX = bubbleX + bubbleWidth - 100;
+            int buttonY = bubbleY + bubbleHeight - 35;
+            
+            return new Rectangle(buttonX, buttonY, 80, 25);
         }
         
         @Override
@@ -324,8 +389,8 @@ public class GameGUI extends JFrame {
                 int textY = rect.y + rect.height / 2 + fm.getAscent() / 2 - 2;
                 
                 // Draw arrow based on position - better alignment
-                // Skip arrows for Asgard and Moon
-                boolean showArrow = !label.equals("Asgard") && !label.equals("Moon");
+                // Skip arrows for Asgard, Moon, and "back" button
+                boolean showArrow = !label.equals("Asgard") && !label.equals("Moon") && !label.equalsIgnoreCase("back");
                 
                 int centerX = rect.x + rect.width / 2;
                 int centerY = rect.y + rect.height / 2;
@@ -359,36 +424,95 @@ public class GameGUI extends JFrame {
             int inventoryBarHeight = 60; // Height of inventory bar
             int messageAreaHeight = 80; // Height of message area
             int characterBaseY = getHeight() - inventoryBarHeight - messageAreaHeight - 20; // Position above inventory/message bars
-            int targetHeight = 120; // Target height for both characters
+            int targetHeight = 180; // Target height for both characters (increased from 120 to make them bigger)
             
-            // Draw Dylin character image (left side, closer to center)
+            // Check if we're in a fight/boss stage (not the main Toronto hub)
+            boolean isFightStage = !state.currentLocationId.equals("loc_toronto");
+            
+            // Calculate character positions
+            int dylinX = 0, dylinY = 0, dylinScaledWidth = 0, dylinScaledHeight = 0;
+            int surferX = 0, surferY = 0, surferScaledWidth = 0, surferScaledHeight = 0;
+            int villainX = 0, villainY = 0, villainScaledWidth = 0, villainScaledHeight = 0;
+            
             if (dylinImage != null) {
                 int dylinWidth = dylinImage.getWidth(null);
                 int dylinHeight = dylinImage.getHeight(null);
                 double scale = (double) targetHeight / dylinHeight;
-                int scaledWidth = (int) (dylinWidth * scale);
-                int scaledHeight = (int) (dylinHeight * scale);
+                dylinScaledWidth = (int) (dylinWidth * scale);
+                dylinScaledHeight = (int) (dylinHeight * scale);
                 // Position closer to center - about 1/3 from left edge
-                int dylinX = getWidth() / 3 - scaledWidth / 2;
-                int dylinY = characterBaseY - scaledHeight; // Align bottom to same baseline
-                g2d.drawImage(dylinImage, dylinX, dylinY, scaledWidth, scaledHeight, null);
+                dylinX = getWidth() / 3 - dylinScaledWidth / 2;
+                dylinY = characterBaseY - dylinScaledHeight; // Align bottom to same baseline
             }
             
-            // Draw Silver Surfer character image (right side, closer to center)
             if (silverSurferImage != null) {
                 int surferWidth = silverSurferImage.getWidth(null);
                 int surferHeight = silverSurferImage.getHeight(null);
                 double scale = (double) targetHeight / surferHeight;
-                int scaledWidth = (int) (surferWidth * scale);
-                int scaledHeight = (int) (surferHeight * scale);
-                // Position closer to center - about 2/3 from left edge
-                int surferX = (getWidth() * 2) / 3 - scaledWidth / 2;
-                int surferY = characterBaseY - scaledHeight; // Align bottom to same baseline as Dylin
-                g2d.drawImage(silverSurferImage, surferX, surferY, scaledWidth, scaledHeight, null);
+                surferScaledWidth = (int) (surferWidth * scale);
+                surferScaledHeight = (int) (surferHeight * scale);
                 
-                // Update Silver Surfer hotspot to match image position
-                characterHotspots.put("char_silver_surfer", 
-                    new Rectangle(surferX, surferY, scaledWidth, scaledHeight));
+                if (isFightStage) {
+                    // In fight stages: Position Silver Surfer behind Dylin, floating above
+                    // Position Silver Surfer further back and floating above Dylin
+                    surferX = dylinX - 160; // Positioned even further back to avoid surfboard touching Dylin
+                    surferY = characterBaseY - surferScaledHeight - 100; // Floating higher above Dylin
+                } else {
+                    // On main page: Position to the right side
+                    surferX = (getWidth() * 2) / 3 - surferScaledWidth / 2;
+                    surferY = characterBaseY - surferScaledHeight; // Align bottom to same baseline as Dylin
+                }
+            }
+
+            VillainConfig villainConfig = VILLAIN_CONFIGS.get(state.currentLocationId);
+            Image villainImage = null;
+            if (villainConfig != null) {
+                villainImage = villainImages.get(state.currentLocationId);
+            }
+
+            if (villainImage != null && villainConfig != null && isFightStage) {
+                int rawWidth = villainImage.getWidth(null);
+                int rawHeight = villainImage.getHeight(null);
+                double scale = (double) villainConfig.targetHeight / rawHeight;
+                villainScaledWidth = (int) (rawWidth * scale);
+                villainScaledHeight = (int) (rawHeight * scale);
+                villainX = (getWidth() * 2) / 3 - villainScaledWidth / 2 + 50;
+                villainY = characterBaseY - villainScaledHeight;
+            }
+            
+            // Draw characters in correct order based on location
+            // In fight stages: Silver Surfer behind (drawn first), Dylin in front (drawn second), villain opposite side
+            // On main page: Dylin first, Silver Surfer second (original order)
+            boolean isBaseStage = state.currentLocationId.equals("loc_toronto");
+            boolean flipDylin = false;          // Dylin always faces right
+            boolean flipSurfer = isBaseStage;   // Silver Surfer faces left only on base stage
+            boolean flipVillain = true;         // Villains always face left (toward heroes)
+
+            if (isFightStage) {
+                // Fight stage: Silver Surfer behind, Dylin in front
+                if (silverSurferImage != null) {
+                    drawSprite(g2d, silverSurferImage, surferX, surferY, surferScaledWidth, surferScaledHeight, flipSurfer);
+                    // Update Silver Surfer hotspot to match image position
+                    characterHotspots.put("char_silver_surfer", 
+                        new Rectangle(surferX, surferY, surferScaledWidth, surferScaledHeight));
+                }
+                if (dylinImage != null) {
+                    drawSprite(g2d, dylinImage, dylinX, dylinY, dylinScaledWidth, dylinScaledHeight, flipDylin);
+                }
+                if (villainImage != null) {
+                    drawSprite(g2d, villainImage, villainX, villainY, villainScaledWidth, villainScaledHeight, flipVillain);
+                }
+            } else {
+                // Main page: Original order (Dylin first, Silver Surfer second)
+                if (dylinImage != null) {
+                    drawSprite(g2d, dylinImage, dylinX, dylinY, dylinScaledWidth, dylinScaledHeight, flipDylin);
+                }
+                if (silverSurferImage != null) {
+                    drawSprite(g2d, silverSurferImage, surferX, surferY, surferScaledWidth, surferScaledHeight, flipSurfer);
+                    // Update Silver Surfer hotspot to match image position
+                    characterHotspots.put("char_silver_surfer", 
+                        new Rectangle(surferX, surferY, surferScaledWidth, surferScaledHeight));
+                }
             }
             
             // Draw dialogue speech bubbles if conversation is active
@@ -401,37 +525,20 @@ public class GameGUI extends JFrame {
                 boolean isSilverSurfer = speaker.equals("Silver Surfer");
                 
                 // Use already calculated character positions
-                
                 int bubbleX, bubbleY;
                 int tailX, tailY;
                 
                 if (isSilverSurfer) {
-                    // Silver Surfer is on the right
-                    int surferWidth = silverSurferImage != null ? silverSurferImage.getWidth(null) : 100;
-                    int surferHeight = silverSurferImage != null ? silverSurferImage.getHeight(null) : 120;
-                    double scale = silverSurferImage != null ? (double) targetHeight / surferHeight : 1.0;
-                    int scaledWidth = (int) (surferWidth * scale);
-                    int surferX = (getWidth() * 2) / 3 - scaledWidth / 2;
-                    int surferY = characterBaseY - (int)(surferHeight * scale);
-                    
                     // Speech bubble above Silver Surfer, pointing down (higher up)
-                    bubbleX = surferX + scaledWidth / 2 - 200;
+                    bubbleX = surferX + surferScaledWidth / 2 - 200;
                     bubbleY = surferY - 150; // Moved higher above character
-                    tailX = surferX + scaledWidth / 2;
+                    tailX = surferX + surferScaledWidth / 2;
                     tailY = surferY - 10; // Tail still points to character head
                 } else {
-                    // Dylin is on the left
-                    int dylinWidth = dylinImage != null ? dylinImage.getWidth(null) : 100;
-                    int dylinHeight = dylinImage != null ? dylinImage.getHeight(null) : 120;
-                    double scale = dylinImage != null ? (double) targetHeight / dylinHeight : 1.0;
-                    int scaledWidth = (int) (dylinWidth * scale);
-                    int dylinX = getWidth() / 3 - scaledWidth / 2;
-                    int dylinY = characterBaseY - (int)(dylinHeight * scale);
-                    
                     // Speech bubble above Dylin, pointing down (higher up)
-                    bubbleX = dylinX + scaledWidth / 2 - 200;
+                    bubbleX = dylinX + dylinScaledWidth / 2 - 200;
                     bubbleY = dylinY - 150; // Moved higher above character
-                    tailX = dylinX + scaledWidth / 2;
+                    tailX = dylinX + dylinScaledWidth / 2;
                     tailY = dylinY - 10; // Tail still points to character head
                 }
                 
@@ -812,9 +919,10 @@ public class GameGUI extends JFrame {
                 int inventoryBarHeight = 60;
                 int messageAreaHeight = 80;
                 int characterBaseY = panelHeight - inventoryBarHeight - messageAreaHeight - 20;
-                int surferX = (panelWidth * 2) / 3 - 60; // Closer to center (2/3 instead of 3/4)
-                int surferY = characterBaseY - 120;
-                characterHotspots.put(cid, new Rectangle(surferX, surferY, 120, 120));
+                int targetHeight = 180; // Match the new character size
+                int surferX = (panelWidth * 2) / 3 - 90; // Adjusted for larger character (was 60)
+                int surferY = characterBaseY - targetHeight;
+                characterHotspots.put(cid, new Rectangle(surferX, surferY, 180, 180)); // Updated to match new size
             } else {
                 // Position other characters on the right side, vertically stacked
                 int x = panelWidth - 180;
