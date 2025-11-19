@@ -37,4 +37,5 @@ public final class Location {
     public boolean removeObject(String objectId) { return this.objectIds.remove(objectId); }
     public void addCharacter(String characterId) { this.characterIds.add(characterId); }
     public boolean removeCharacter(String characterId) { return this.characterIds.remove(characterId); }
+    public void addConnection(Connection connection) { this.connections.add(connection); }
 }

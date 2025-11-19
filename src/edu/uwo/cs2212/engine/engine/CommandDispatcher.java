@@ -212,13 +212,18 @@ public final class CommandDispatcher {
             for (edu.uwo.cs2212.engine.rules.MiniGameRule mr : game.getMiniGameRules()) {
                 GameObject primObj = (prim.objectId != null) ? game.getObjects().get(prim.objectId) : null;
                 GameObject withObj = (with != null && with.objectId != null) ? game.getObjects().get(with.objectId) : null;
+                GameCharacter withChar = null;
+                // Check if "with" is a character that's in the current location
+                if (with != null && with.objectId != null && loc.getCharacterIds().contains(with.objectId)) {
+                    withChar = game.getCharacters().get(with.objectId);
+                }
 
                 boolean primaryMatches = false;
                 if (prim.objectId != null && primObj != null) primaryMatches = matches(mr.primary, primObj);
                 else if (prim.attribute != null) {
                     for (String id : visibleOrInventory(loc)) {
                         GameObject cand = game.getObjects().get(id);
-                        if (cand.getAttributes().contains(prim.attribute) && matches(mr.primary, cand)) {
+                        if (cand != null && cand.getAttributes().contains(prim.attribute) && matches(mr.primary, cand)) {
                             primObj = cand; primaryMatches = true; break;
                         }
                     }
@@ -228,11 +233,20 @@ public final class CommandDispatcher {
                 boolean withMatches = (mr.with == null && with == null);
                 if (!withMatches) {
                     if (with == null || mr.with == null) continue;
-                    if (with.objectId != null && withObj != null) withMatches = matches(mr.with, withObj);
+                    // Check if matching by object ID
+                    if (with.objectId != null && withObj != null) {
+                        withMatches = matches(mr.with, withObj);
+                    }
+                    // Check if matching by character ID (for minigame rules)
+                    else if (with.objectId != null && withChar != null && mr.with != null && mr.with.objectId != null) {
+                        // Direct ID match for characters
+                        withMatches = mr.with.objectId.equals(with.objectId);
+                    }
+                    // Check if matching by attribute
                     else if (with.attribute != null) {
                         for (String id : visibleOrInventory(loc)) {
                             GameObject cand = game.getObjects().get(id);
-                            if (cand.getAttributes().contains(with.attribute) && matches(mr.with, cand)) {
+                            if (cand != null && cand.getAttributes().contains(with.attribute) && matches(mr.with, cand)) {
                                 withObj = cand; withMatches = true; break;
                             }
                         }
@@ -247,11 +261,27 @@ public final class CommandDispatcher {
                     state.turnsTaken++;
                     return CommandResult.fail("Mini-game not found: " + mr.miniGameId);
                 }
-                var res = mg.play(game, state);
+                edu.uwo.cs2212.engine.minigame.MiniGameResult res;
+                try {
+                    res = mg.play(game, state);
+                } catch (Exception e) {
+                    state.turnsTaken++;
+                    e.printStackTrace();
+                    return CommandResult.fail("Mini-game error: " + e.getMessage());
+                }
                 // On success, consume inputs and produce rewards
                 if (res.success) {
-                    if (primObj != null) { loc.removeObject(primObj.getId()); state.inventory.remove(primObj.getId()); }
-                    if (withObj != null) { loc.removeObject(withObj.getId()); state.inventory.remove(withObj.getId()); }
+                    // Remove primary object if it exists
+                    if (primObj != null) { 
+                        loc.removeObject(primObj.getId()); 
+                        state.inventory.remove(primObj.getId()); 
+                    }
+                    // Remove "with" object if it exists (but not characters - they stay)
+                    if (withObj != null) { 
+                        loc.removeObject(withObj.getId()); 
+                        state.inventory.remove(withObj.getId()); 
+                    }
+                    // Characters are not removed - they stay in the location
                     java.util.List<String> outIds = res.producedObjectIds.isEmpty() ? mr.rewardObjectIds : res.producedObjectIds;
                     for (String pid : outIds) {
                         if (anyInLocation) loc.addObject(pid); else state.inventory.add(pid);

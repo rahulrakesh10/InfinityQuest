@@ -33,6 +33,21 @@ public final class GameLoader {
         objects.put(lockedChest.getId(), lockedChest);
         objects.put(openChest.getId(), openChest);
         objects.put(picks.getId(), picks);
+        
+        // Thor level objects
+        GameObject stormbreakerChest = new GameObject("obj_stormbreaker_chest", "Ancient Chest", 
+                "An ornate chest with Asgardian runes. It seems to contain something powerful.", false, set(), 
+                List.of("obj_stormbreaker"));
+        GameObject stormbreaker = new GameObject("obj_stormbreaker", "Stormbreaker", 
+                "The legendary axe of Thor. It crackles with lightning energy. You'll need this to face Thor.", 
+                true, set("stormbreaker", "weapon"), List.of());
+        objects.put(stormbreakerChest.getId(), stormbreakerChest);
+        objects.put(stormbreaker.getId(), stormbreaker);
+        
+        // Infinity Stone (reward for defeating Thor)
+        GameObject infinityStone2 = new GameObject("obj_infinity_stone_2", "Infinity Stone (Power)", 
+                "A glowing Infinity Stone. You've collected the second stone!", true, set("infinity_stone"), List.of());
+        objects.put(infinityStone2.getId(), infinityStone2);
 
 
         // Characters
@@ -61,6 +76,16 @@ public final class GameLoader {
         GameCharacter patient = new GameCharacter("char_patient", "Bedridden Stranger", "Parched and weak.",
                 List.of("I'm so thirsty...", "Do you have water?"), List.of(new Want("obj_cup_water", null)));
         characters.put(patient.getId(), patient);
+        
+        // Thor - Boss character
+        GameCharacter thor = new GameCharacter("char_thor", "Thor", 
+                "The God of Thunder. He stands ready for battle, wielding Mjolnir. You must defeat him to proceed.",
+                List.of("You dare challenge the God of Thunder?", 
+                        "Face me in battle, mortal!",
+                        "Only those worthy can pass!",
+                        "Let the lightning decide your fate!"),
+                List.of());
+        characters.put(thor.getId(), thor);
 
         // Locations
         // New York - Symbiote Spider-Man boss
@@ -71,13 +96,40 @@ public final class GameLoader {
                 new ArrayList<>(), 
                 new ArrayList<>(List.of(new Connection("back", "loc_toronto"))));
         
-        // Asgard - Thor boss
-        Location asgard = new Location("loc_asgard", "Asgard", 
-                "The realm of Asgard. Thor awaits with Stormbreaker. Reflect his lightning to defeat him.",
+        // Asgard locations - Thor level
+        // Asgard Hall - starting location in Asgard
+        Location asgardHall = new Location("loc_asgard_hall", "Asgard Hall", 
+                "The grand hall of Asgard. Golden pillars reach to the sky. You can explore to find Stormbreaker.",
                 "images/Stage2.png", 
                 new ArrayList<>(), 
                 new ArrayList<>(), 
-                new ArrayList<>(List.of(new Connection("back", "loc_toronto"))));
+                new ArrayList<>(List.of(
+                    new Connection("back", "loc_toronto"),
+                    new Connection("Explore East", "loc_asgard_chest_room")
+                )));
+        
+        // Chest Room - where Stormbreaker is found
+        Location asgardChestRoom = new Location("loc_asgard_chest_room", "Asgard Treasure Room", 
+                "A hidden chamber filled with ancient Asgardian artifacts. An ornate chest sits in the center.",
+                "images/Stage2.png", 
+                new ArrayList<>(List.of("obj_stormbreaker_chest")), 
+                new ArrayList<>(), 
+                new ArrayList<>(List.of(
+                    new Connection("back", "loc_asgard_hall"),
+                    new Connection("Enter Boss Chamber", "loc_asgard_boss_room")
+                )));
+        
+        // Boss Room - where Thor is fought (requires Stormbreaker to enter)
+        Location asgardBossRoom = new Location("loc_asgard_boss_room", "Thor's Arena", 
+                "The arena where Thor awaits. Lightning crackles in the air. You must defeat him in battle!",
+                "images/Stage2.png", 
+                new ArrayList<>(), 
+                new ArrayList<>(List.of("char_thor")), 
+                new ArrayList<>(List.of(
+                    new Connection("back", "loc_asgard_chest_room")
+                )));
+        
+        // Removed old asgard location - use asgardHall directly
         
         // Sokovia - Wanda boss
         Location sokovia = new Location("loc_sokovia", "Sokovia", 
@@ -104,7 +156,7 @@ public final class GameLoader {
                 new ArrayList<>(List.of("char_silver_surfer")), // Dylin is the player, not an NPC
                 new ArrayList<>(List.of(
                     new Connection("New York", "loc_new_york"),
-                    new Connection("Asgard", "loc_asgard"),
+                    new Connection("Asgard", "loc_asgard_hall"),
                     new Connection("Sokovia", "loc_sokovia"),
                     new Connection("Moon", "loc_moon")
                 )));
@@ -121,7 +173,9 @@ public final class GameLoader {
 
         locations.put(toronto.getId(), toronto);
         locations.put(newYork.getId(), newYork);
-        locations.put(asgard.getId(), asgard);
+        locations.put(asgardHall.getId(), asgardHall);
+        locations.put(asgardChestRoom.getId(), asgardChestRoom);
+        locations.put(asgardBossRoom.getId(), asgardBossRoom);
         locations.put(sokovia.getId(), sokovia);
         locations.put(moon.getId(), moon);
         locations.put(crypt.getId(), crypt);
@@ -143,6 +197,26 @@ public final class GameLoader {
                 List.of("obj_open_chest"),
                 "The lock yields with a click; the chest is now open.",
                 "You fail to pick the lock."
+        ));
+        
+        // Thor level rules
+        // Rule: Examine chest to reveal Stormbreaker (or use chest to open it)
+        useRules.add(new UseRule(
+                Selector.byId("obj_stormbreaker_chest"),
+                null,
+                "You open the chest. Inside, you find Stormbreaker, the legendary axe of Thor!",
+                List.of("obj_stormbreaker")
+        ));
+        
+        // Mini-game rule: Use Stormbreaker with Thor to start the lightning dodge battle
+        // Note: primary is the object being used, with is what it's used with
+        miniGameRules.add(new MiniGameRule(
+                Selector.byAttr("stormbreaker"),  // Use Stormbreaker (primary)
+                Selector.byId("char_thor"),       // with Thor (secondary)
+                "lightning_dodge_thor",
+                List.of("obj_infinity_stone_2"),
+                "You have defeated Thor! The path to Wanda is now unlocked.",
+                "Thor's lightning was too powerful. You must try again."
         ));
 
         // Give rules (example)

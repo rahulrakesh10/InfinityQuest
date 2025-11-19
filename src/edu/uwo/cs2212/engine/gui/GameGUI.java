@@ -4,6 +4,7 @@ import edu.uwo.cs2212.engine.engine.*;
 import edu.uwo.cs2212.engine.io.GameLoader;
 import edu.uwo.cs2212.engine.model.*;
 import edu.uwo.cs2212.engine.minigame.*;
+import edu.uwo.cs2212.engine.minigame.LightningReflectionMiniGame;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -42,6 +43,8 @@ public class GameGUI extends JFrame {
     private String[][] conversation;
     private int currentDialogueIndex = -1; // -1 means no dialogue active
     private boolean showingInitialDialogue = false;
+    private boolean showingThorDialogue = false;
+    private boolean thorDialogueShown = false; // Track if Thor dialogue has been shown to prevent re-triggering
 
     /**
      * Metadata for villain sprites shown on boss stages.
@@ -57,7 +60,7 @@ public class GameGUI extends JFrame {
 
     private static final Map<String, VillainConfig> VILLAIN_CONFIGS = Map.of(
         "loc_new_york", new VillainConfig("images/Symbiote.png", 180),
-        "loc_asgard", new VillainConfig("images/Thor.png", 220),
+        "loc_asgard_boss_room", new VillainConfig("images/Thor.png", 220),
         "loc_sokovia", new VillainConfig("images/Scarlet.png", 180),
         "loc_moon", new VillainConfig("images/ThanosV1.png", 260)
     );
@@ -71,6 +74,7 @@ public class GameGUI extends JFrame {
         
         // Register mini-games
         MiniGameRegistry.register(new LockpickMiniGame("lockpick_crypt", 5));
+        MiniGameRegistry.register(new LightningReflectionMiniGame("lightning_dodge_thor", 100, 200, 15, 20));
         
         // Initialize conversation
         conversation = new String[][]{
@@ -108,8 +112,12 @@ public class GameGUI extends JFrame {
             gameViewPanel.repaint();
         } else {
             // End dialogue
-            currentDialogueIndex = -1;
-            showingInitialDialogue = false;
+            if (showingInitialDialogue) {
+                currentDialogueIndex = -1;
+                showingInitialDialogue = false;
+            } else if (showingThorDialogue) {
+                endThorDialogue();
+            }
             gameViewPanel.repaint();
         }
     }
@@ -119,6 +127,7 @@ public class GameGUI extends JFrame {
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
         setSize(1000, 700);
+        setResizable(true); // Enable resizing/fullscreen
         
         // Top bar with location name and turns
         JPanel topBar = new JPanel(new BorderLayout());
@@ -183,19 +192,34 @@ public class GameGUI extends JFrame {
                 @Override
                 public void mousePressed(MouseEvent e) {
                     // Use mousePressed instead of mouseClicked for more responsive button handling
-                    // Check if clicking on dialogue "Next" button
-                    if (currentDialogueIndex >= 0 && currentDialogueIndex < conversation.length) {
-                        Rectangle buttonRect = getDialogueButtonRect();
-                        if (buttonRect != null && buttonRect.contains(e.getPoint())) {
+                    
+                    // Check if dialogue is active
+                    if (showingInitialDialogue || showingThorDialogue) {
+                        // Check if clicking on dialogue "Next" button
+                        if (currentDialogueIndex >= 0 && currentDialogueIndex < conversation.length) {
+                            Rectangle buttonRect = getDialogueButtonRect();
+                            if (buttonRect != null && buttonRect.contains(e.getPoint())) {
+                                nextDialogue();
+                                return;
+                            }
+                        }
+                        // If dialogue is active but not clicking the button, don't process other clicks
+                        // (except allow clicking anywhere on initial dialogue to advance)
+                        if (showingInitialDialogue) {
+                            // Allow clicking anywhere to advance initial dialogue
                             nextDialogue();
                             return;
                         }
+                        // For Thor dialogue, allow clicking anywhere to advance (like initial dialogue)
+                        if (showingThorDialogue) {
+                            nextDialogue();
+                            return;
+                        }
+                        return;
                     }
                     
-                    // Only handle other clicks if not in initial dialogue
-                    if (!showingInitialDialogue) {
-                        handleClick(e.getX(), e.getY());
-                    }
+                    // No dialogue active - handle normal game clicks
+                    handleClick(e.getX(), e.getY());
                 }
             });
             
@@ -270,6 +294,9 @@ public class GameGUI extends JFrame {
          * Returns null if no dialogue is active.
          */
         private Rectangle getDialogueButtonRect() {
+            if (!showingInitialDialogue && !showingThorDialogue) {
+                return null;
+            }
             if (currentDialogueIndex < 0 || currentDialogueIndex >= conversation.length) {
                 return null;
             }
@@ -280,10 +307,38 @@ public class GameGUI extends JFrame {
             int targetHeight = 180; // Increased from 120 to make characters bigger
             
             String[] message = conversation[currentDialogueIndex];
-            boolean isSilverSurfer = message[0].equals("Silver Surfer");
+            String speaker = message[0];
+            boolean isSilverSurfer = speaker.equals("Silver Surfer");
+            boolean isThor = speaker.equals("Thor");
             
             int bubbleX, bubbleY;
-            if (isSilverSurfer) {
+            
+            if (isThor && showingThorDialogue) {
+                // Calculate Thor's position (villain on the right side)
+                VillainConfig villainConfig = VILLAIN_CONFIGS.get("loc_asgard_boss_room");
+                if (villainConfig != null) {
+                    Image villainImage = villainImages.get("loc_asgard_boss_room");
+                    if (villainImage != null) {
+                        int rawWidth = villainImage.getWidth(null);
+                        int rawHeight = villainImage.getHeight(null);
+                        double scale = (double) villainConfig.targetHeight / rawHeight;
+                        int villainScaledWidth = (int) (rawWidth * scale);
+                        int villainX = (getWidth() * 2) / 3 - villainScaledWidth / 2 + 50;
+                        int villainY = characterBaseY - villainConfig.targetHeight;
+                        
+                        bubbleX = villainX + villainScaledWidth / 2 - 200;
+                        bubbleY = villainY - 150;
+                    } else {
+                        // Fallback if image not loaded
+                        bubbleX = getWidth() / 2 - 200;
+                        bubbleY = 100;
+                    }
+                } else {
+                    // Fallback
+                    bubbleX = getWidth() / 2 - 200;
+                    bubbleY = 100;
+                }
+            } else if (isSilverSurfer) {
                 int surferWidth = silverSurferImage != null ? silverSurferImage.getWidth(null) : 100;
                 int surferHeight = silverSurferImage != null ? silverSurferImage.getHeight(null) : 120;
                 double scale = silverSurferImage != null ? (double) targetHeight / surferHeight : 1.0;
@@ -293,6 +348,7 @@ public class GameGUI extends JFrame {
                 bubbleX = surferX + scaledWidth / 2 - 200;
                 bubbleY = surferY - 150;
             } else {
+                // Dylin or other speakers
                 int dylinWidth = dylinImage != null ? dylinImage.getWidth(null) : 100;
                 int dylinHeight = dylinImage != null ? dylinImage.getHeight(null) : 120;
                 double scale = dylinImage != null ? (double) targetHeight / dylinHeight : 1.0;
@@ -426,8 +482,11 @@ public class GameGUI extends JFrame {
             int characterBaseY = getHeight() - inventoryBarHeight - messageAreaHeight - 20; // Position above inventory/message bars
             int targetHeight = 180; // Target height for both characters (increased from 120 to make them bigger)
             
-            // Check if we're in a fight/boss stage (not the main Toronto hub)
-            boolean isFightStage = !state.currentLocationId.equals("loc_toronto");
+            // Only show villains on specific boss locations
+            boolean isBossLocation = state.currentLocationId.equals("loc_new_york") ||
+                                    state.currentLocationId.equals("loc_asgard_boss_room") ||
+                                    state.currentLocationId.equals("loc_sokovia") ||
+                                    state.currentLocationId.equals("loc_moon");
             
             // Calculate character positions
             int dylinX = 0, dylinY = 0, dylinScaledWidth = 0, dylinScaledHeight = 0;
@@ -452,8 +511,8 @@ public class GameGUI extends JFrame {
                 surferScaledWidth = (int) (surferWidth * scale);
                 surferScaledHeight = (int) (surferHeight * scale);
                 
-                if (isFightStage) {
-                    // In fight stages: Position Silver Surfer behind Dylin, floating above
+                if (isBossLocation) {
+                    // In boss locations: Position Silver Surfer behind Dylin, floating above
                     // Position Silver Surfer further back and floating above Dylin
                     surferX = dylinX - 160; // Positioned even further back to avoid surfboard touching Dylin
                     surferY = characterBaseY - surferScaledHeight - 100; // Floating higher above Dylin
@@ -466,11 +525,11 @@ public class GameGUI extends JFrame {
 
             VillainConfig villainConfig = VILLAIN_CONFIGS.get(state.currentLocationId);
             Image villainImage = null;
-            if (villainConfig != null) {
+            if (villainConfig != null && isBossLocation) {
                 villainImage = villainImages.get(state.currentLocationId);
             }
 
-            if (villainImage != null && villainConfig != null && isFightStage) {
+            if (villainImage != null && villainConfig != null && isBossLocation) {
                 int rawWidth = villainImage.getWidth(null);
                 int rawHeight = villainImage.getHeight(null);
                 double scale = (double) villainConfig.targetHeight / rawHeight;
@@ -481,14 +540,14 @@ public class GameGUI extends JFrame {
             }
             
             // Draw characters in correct order based on location
-            // In fight stages: Silver Surfer behind (drawn first), Dylin in front (drawn second), villain opposite side
+            // In boss locations: Silver Surfer behind (drawn first), Dylin in front (drawn second), villain opposite side
             // On main page: Dylin first, Silver Surfer second (original order)
             boolean isBaseStage = state.currentLocationId.equals("loc_toronto");
             boolean flipDylin = false;          // Dylin always faces right
             boolean flipSurfer = isBaseStage;   // Silver Surfer faces left only on base stage
             boolean flipVillain = true;         // Villains always face left (toward heroes)
 
-            if (isFightStage) {
+            if (isBossLocation) {
                 // Fight stage: Silver Surfer behind, Dylin in front
                 if (silverSurferImage != null) {
                     drawSprite(g2d, silverSurferImage, surferX, surferY, surferScaledWidth, surferScaledHeight, flipSurfer);
@@ -516,13 +575,15 @@ public class GameGUI extends JFrame {
             }
             
             // Draw dialogue speech bubbles if conversation is active
-            if (currentDialogueIndex >= 0 && currentDialogueIndex < conversation.length) {
+            if ((showingInitialDialogue || showingThorDialogue) && 
+                currentDialogueIndex >= 0 && currentDialogueIndex < conversation.length) {
                 String[] message = conversation[currentDialogueIndex];
                 String speaker = message[0];
                 String text = message[1];
                 
                 // Determine which character is speaking and their position
                 boolean isSilverSurfer = speaker.equals("Silver Surfer");
+                boolean isThor = speaker.equals("Thor");
                 
                 // Use already calculated character positions
                 int bubbleX, bubbleY;
@@ -534,6 +595,12 @@ public class GameGUI extends JFrame {
                     bubbleY = surferY - 150; // Moved higher above character
                     tailX = surferX + surferScaledWidth / 2;
                     tailY = surferY - 10; // Tail still points to character head
+                } else if (isThor && villainImage != null) {
+                    // Speech bubble above Thor (villain), pointing down
+                    bubbleX = villainX + villainScaledWidth / 2 - 200;
+                    bubbleY = villainY - 150;
+                    tailX = villainX + villainScaledWidth / 2;
+                    tailY = villainY - 10;
                 } else {
                     // Speech bubble above Dylin, pointing down (higher up)
                     bubbleX = dylinX + dylinScaledWidth / 2 - 200;
@@ -552,7 +619,14 @@ public class GameGUI extends JFrame {
                 if (bubbleY < 10) bubbleY = 10;
                 
                 // Bubble background
-                Color bubbleColor = isSilverSurfer ? new Color(60, 80, 120) : new Color(120, 80, 60);
+                Color bubbleColor;
+                if (isSilverSurfer) {
+                    bubbleColor = new Color(60, 80, 120);
+                } else if (isThor) {
+                    bubbleColor = new Color(100, 50, 50); // Reddish for Thor
+                } else {
+                    bubbleColor = new Color(120, 80, 60); // Brownish for Dylin
+                }
                 g2d.setColor(bubbleColor);
                 g2d.fillRoundRect(bubbleX, bubbleY, bubbleWidth, bubbleHeight, 15, 15);
                 
@@ -621,11 +695,54 @@ public class GameGUI extends JFrame {
                 g2d.drawString(buttonText, buttonX + (80 - btnTextWidth) / 2, buttonY + 17);
             }
             
-            // Draw object labels (optional - can enable for debugging)
-            if (false) {
-                g2d.setColor(new Color(255, 0, 0, 100));
-                for (Rectangle rect : objectHotspots.values()) {
-                    g2d.fillRect(rect.x, rect.y, rect.width, rect.height);
+            // Draw objects as visible, clickable items on screen
+            g2d.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
+            for (Map.Entry<String, Rectangle> entry : objectHotspots.entrySet()) {
+                String objId = entry.getKey();
+                Rectangle rect = entry.getValue();
+                GameObject obj = game.getObjects().get(objId);
+                
+                if (obj != null) {
+                    // Draw object background (semi-transparent box)
+                    g2d.setColor(new Color(100, 100, 150, 180));
+                    g2d.fillRoundRect(rect.x, rect.y, rect.width, rect.height, 10, 10);
+                    
+                    // Draw border
+                    g2d.setColor(new Color(150, 150, 255));
+                    g2d.setStroke(new BasicStroke(2));
+                    g2d.drawRoundRect(rect.x, rect.y, rect.width, rect.height, 10, 10);
+                    
+                    // Draw object name
+                    g2d.setColor(Color.WHITE);
+                    FontMetrics fm = g2d.getFontMetrics();
+                    String name = obj.getName();
+                    int textWidth = fm.stringWidth(name);
+                    int textX = rect.x + (rect.width - textWidth) / 2;
+                    int textY = rect.y + rect.height / 2 + fm.getAscent() / 2 - 2;
+                    
+                    // Wrap text if too long
+                    if (textWidth > rect.width - 10) {
+                        // Split into multiple lines
+                        String[] words = name.split(" ");
+                        StringBuilder line = new StringBuilder();
+                        int currentY = rect.y + 20;
+                        for (String word : words) {
+                            String testLine = line.length() == 0 ? word : line + " " + word;
+                            int width = fm.stringWidth(testLine);
+                            if (width > rect.width - 10 && line.length() > 0) {
+                                g2d.drawString(line.toString(), rect.x + 5, currentY);
+                                line = new StringBuilder(word);
+                                currentY += 15;
+                            } else {
+                                line = new StringBuilder(testLine);
+                            }
+                        }
+                        if (line.length() > 0) {
+                            g2d.drawString(line.toString(), rect.x + 5, currentY);
+                        }
+                    } else {
+                        g2d.drawString(name, textX, textY);
+                    }
                 }
             }
         }
@@ -708,6 +825,7 @@ public class GameGUI extends JFrame {
         List<String> available = new ArrayList<>();
         available.addAll(loc.getObjectIds());
         available.addAll(state.inventory);
+        available.addAll(loc.getCharacterIds()); // Include characters too!
         available.remove(objId); // Remove self
         
         if (available.isEmpty()) {
@@ -718,8 +836,16 @@ public class GameGUI extends JFrame {
         String[] options = new String[available.size() + 1];
         options[0] = "Use alone";
         for (int i = 0; i < available.size(); i++) {
-            GameObject obj = game.getObjects().get(available.get(i));
-            options[i + 1] = "Use with " + (obj != null ? obj.getName() : available.get(i));
+            String id = available.get(i);
+            GameObject obj = game.getObjects().get(id);
+            GameCharacter ch = game.getCharacters().get(id);
+            if (obj != null) {
+                options[i + 1] = "Use with " + obj.getName();
+            } else if (ch != null) {
+                options[i + 1] = "Use with " + ch.getName();
+            } else {
+                options[i + 1] = "Use with " + id;
+            }
         }
         
         int choice = JOptionPane.showOptionDialog(this,
@@ -751,6 +877,10 @@ public class GameGUI extends JFrame {
             
             switch (cmd) {
                 case "go":
+                    // Reset Thor dialogue flag when leaving boss room
+                    if (state.currentLocationId.equals("loc_asgard_boss_room")) {
+                        thorDialogueShown = false;
+                    }
                     result = dispatcher.go(joinFrom(toks, 1));
                     break;
                 case "pickup":
@@ -793,8 +923,27 @@ public class GameGUI extends JFrame {
                     }
                     break;
                 case "use":
+                    // Run use command in background thread to avoid blocking EDT if minigame starts
                     if (toks.length >= 4 && toks[2].equalsIgnoreCase("with")) {
-                        result = dispatcher.use(toks[1], toks[3]);
+                        String primaryId = toks[1];
+                        String withId = toks[3];
+                        // Check if this might trigger a minigame by checking if "with" is a character
+                        Location currentLoc = game.getLocations().get(state.currentLocationId);
+                        boolean mightBeMinigame = currentLoc != null && currentLoc.getCharacterIds().contains(withId);
+                        
+                        if (mightBeMinigame) {
+                            // Run in background thread to avoid blocking EDT
+                            new Thread(() -> {
+                                CommandResult bgResult = dispatcher.use(primaryId, withId);
+                                SwingUtilities.invokeLater(() -> {
+                                    appendMessage(bgResult.message);
+                                    handleCommandResult(bgResult);
+                                });
+                            }).start();
+                            return; // Return early, result will be handled in background thread
+                        } else {
+                            result = dispatcher.use(primaryId, withId);
+                        }
                     } else if (toks.length >= 2) {
                         result = dispatcher.use(toks[1], null);
                     } else {
@@ -805,17 +954,40 @@ public class GameGUI extends JFrame {
                     result = CommandResult.fail("Unknown command: " + cmd);
             }
             
-            appendMessage(result.message);
-            updateDisplay();
-            
-            // Check win condition
-            if (game.getEndLocationIds().contains(state.currentLocationId)) {
-                appendMessage("*** VICTORY! You have completed your quest! ***");
-            }
-            
+            handleCommandResult(result);
         } catch (Exception e) {
             appendMessage("Error: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+    
+    private void handleCommandResult(CommandResult result) {
+        appendMessage(result.message);
+        
+        // Check if Thor was defeated - unlock Sokovia connection
+        if (result.message.contains("defeated Thor") || result.message.contains("path to Wanda")) {
+            Location asgardBossRoom = game.getLocations().get("loc_asgard_boss_room");
+            if (asgardBossRoom != null) {
+                // Check if Sokovia connection doesn't exist yet
+                boolean hasSokoviaConnection = false;
+                for (Connection c : asgardBossRoom.getConnections()) {
+                    if (c.getTargetLocationId().equals("loc_sokovia")) {
+                        hasSokoviaConnection = true;
+                        break;
+                    }
+                }
+                if (!hasSokoviaConnection) {
+                    asgardBossRoom.addConnection(new Connection("To Sokovia", "loc_sokovia"));
+                    appendMessage("The path to Sokovia has been unlocked!");
+                }
+            }
+        }
+        
+        updateDisplay();
+        
+        // Check win condition
+        if (game.getEndLocationIds().contains(state.currentLocationId)) {
+            appendMessage("*** VICTORY! You have completed your quest! ***");
         }
     }
     
@@ -831,11 +1003,31 @@ public class GameGUI extends JFrame {
     private void updateDisplay() {
         Location loc = game.getLocations().get(state.currentLocationId);
         
+        // Safety check - if location doesn't exist, reset to Toronto
+        if (loc == null) {
+            appendMessage("Error: Location not found! Returning to Toronto.");
+            state.currentLocationId = "loc_toronto";
+            loc = game.getLocations().get(state.currentLocationId);
+            if (loc == null) {
+                appendMessage("Fatal error: Toronto location not found!");
+                return;
+            }
+        }
+        
         // Update location name
         locationNameLabel.setText(loc.getName());
         
         // Update location image
         updateLocationImage(loc.getImagePath());
+        
+        // Check if we entered Thor's boss room - show dialogue (only once)
+        if (loc.getId().equals("loc_asgard_boss_room") && !thorDialogueShown && !showingThorDialogue && !showingInitialDialogue) {
+            thorDialogueShown = true;
+            // Delay dialogue slightly to allow display to update first
+            SwingUtilities.invokeLater(() -> {
+                startThorDialogue();
+            });
+        }
         
         // Turns removed - not needed for adventure game
         // turnsLabel.setText("Turns: " + state.turnsTaken + 
@@ -851,6 +1043,25 @@ public class GameGUI extends JFrame {
         SwingUtilities.invokeLater(() -> {
             gameViewPanel.repaint();
         });
+    }
+    
+    private void startThorDialogue() {
+        showingThorDialogue = true;
+        conversation = new String[][]{
+            {"Thor", "You dare enter my arena, mortal?"},
+            {"Dylin", "I need to pass through, Thor. I'm on a quest to save the universe."},
+            {"Thor", "Only those worthy may pass! Face me in battle!"},
+            {"Dylin", "I have Stormbreaker. I'm ready to face your lightning."},
+            {"Thor", "Then let the lightning decide your fate! Use Stormbreaker against me!"}
+        };
+        currentDialogueIndex = 0;
+        gameViewPanel.repaint();
+    }
+    
+    private void endThorDialogue() {
+        showingThorDialogue = false;
+        currentDialogueIndex = -1;
+        gameViewPanel.repaint();
     }
     
     private void updateLocationImage(String imagePath) {
@@ -973,8 +1184,39 @@ public class GameGUI extends JFrame {
                         break;
                 }
             } else {
-                // For other locations, put "back" button at bottom center (above inventory, on screen)
-                rect = new Rectangle(panelWidth / 2 - buttonWidth / 2, panelHeight - 110, buttonWidth, buttonHeight);
+                // For other locations (including Asgard locations)
+                // First pass: count non-back buttons to position them correctly
+                int nonBackCount = 0;
+                for (Connection conn : loc.getConnections()) {
+                    if (!conn.getLabel().equalsIgnoreCase("back")) {
+                        nonBackCount++;
+                    }
+                }
+                
+                // Position navigation buttons above the back button
+                String label = c.getLabel();
+                if (label.equalsIgnoreCase("back")) {
+                    // Back button at bottom center (above inventory)
+                    rect = new Rectangle(panelWidth / 2 - buttonWidth / 2, panelHeight - 110, buttonWidth, buttonHeight);
+                } else {
+                    // Other navigation buttons (like "Explore East", "Enter Boss Chamber") positioned above back button
+                    // Count how many non-back buttons come before this one
+                    int navButtonIndex = 0;
+                    for (int i = 0; i < connIndex; i++) {
+                        if (!loc.getConnections().get(i).getLabel().equalsIgnoreCase("back")) {
+                            navButtonIndex++;
+                        }
+                    }
+                    
+                    // Stack them vertically, starting from above the back button
+                    int backButtonY = panelHeight - 110;
+                    int navButtonY = backButtonY - ((nonBackCount - navButtonIndex) * (buttonHeight + 10)) - 10;
+                    // Make sure buttons don't go off screen
+                    if (navButtonY < 50) {
+                        navButtonY = 50 + (navButtonIndex * (buttonHeight + 10));
+                    }
+                    rect = new Rectangle(panelWidth / 2 - buttonWidth / 2, navButtonY, buttonWidth, buttonHeight);
+                }
             }
             connectionHotspots.put(c.getLabel(), rect);
             connIndex++;
